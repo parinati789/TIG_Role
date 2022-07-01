@@ -1,0 +1,96 @@
+- name: set timezone Asia/Kolkata
+  timezone: 
+    name: Asia/Kolkata
+- name: Install libselinux-python
+  yum:
+    name: python36
+    state: present
+- name: Create influxdb.repo file
+  file:
+    path: /etc/yum.repos.d/influxdb.repo
+    state: touch
+- name: update influexdb.repo
+  yum_repository: 
+    name: influxdb
+    description: InfluxDB Repository - RHEL \$releasever
+    baseurl: https://repos.influxdata.com/rhel/7/$basearch/stable
+    enabled: 1
+    gpgcheck: 1
+    gpgkey: https://repos.influxdata.com/influxdb.key
+  
+
+- name: install influxdb
+  yum:
+    name: influxdb
+    state: present
+
+- name: enable and start influxdb
+  service:
+    name: influxdb
+    state: started
+    enabled: true
+
+- name: query for searching databases
+  uri:
+    url: "http://localhost:8086/query"
+    method: POST
+    body: 'q=SHOW DATABASES'
+  register: response
+
+- name: query to create database
+  uri:
+    url: "http://localhost:8086/query"
+    method: POST
+    body: 'q=CREATE DATABASE "{{ influxdb_name }}"'
+  register: response
+  changed_when: response.status == 200
+
+- name: creating user
+  shell: curl "http://localhost:8086/query" --data-urlencode "q=CREATE USER {{ db_admin_username }} WITH PASSWORD '{{ db_admin_password }}' WITH ALL PRIVILEGES"
+  register: response
+- name: grant permission to "{{ db_admin_username }}"
+  uri:
+    url: "http://localhost:8086/query"
+    method: POST
+    body: 'q=GRANT ALL PRIVILEGES TO "{{ db_admin_username }}"'
+- name: auth-enabled in Influxdb.config
+  shell: sed -i "s/# auth-enabled = false/auth-enabled = true/g" /etc/influxdb/influxdb.conf
+
+
+
+
+- name: installing telegraf
+  yum: 
+    name: telegraf
+    state: present
+
+ 
+
+
+
+- name: copy TIG_stack/templates/telegraf.j2 to /etc/telegraf/telegraf.conf
+  template:
+    src: telegraf.conf.j2  
+    dest: /etc/telegraf/telegraf.conf
+    group: telegraf
+    mode: '640'
+  notify: restart telegraf
+- name: update yum for grafana 
+  yum_repository: 
+    name: grafana
+    description: grafana desc
+    baseurl: https://packages.grafana.com/oss/rpm
+    gpgcheck: 1
+    enabled: 1
+    gpgkey: https://packages.grafana.com/gpg.key
+
+- name:  install grafana
+  yum: 
+   name: grafana
+   state: present
+
+- name: grafan start
+  service: 
+    name: grafana-server
+    state: started
+    enabled: true
